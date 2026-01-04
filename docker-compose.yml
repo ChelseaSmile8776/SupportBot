@@ -1,0 +1,29 @@
+services:
+  db:
+    platform: linux/amd64
+    image: postgres:16
+    environment:
+      POSTGRES_DB: supportbot
+      POSTGRES_USER: supportbot
+      POSTGRES_PASSWORD: supportbot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    platform: linux/amd64
+    build: .
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/supportbot
+      SPRING_DATASOURCE_USERNAME: supportbot
+      SPRING_DATASOURCE_PASSWORD: supportbot
+      BOT_TOKEN: ${BOT_TOKEN}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      PUBLIC_WEBHOOK_URL: ${PUBLIC_WEBHOOK_URL}
+      BOT_USERNAME: ${BOT_USERNAME}
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
