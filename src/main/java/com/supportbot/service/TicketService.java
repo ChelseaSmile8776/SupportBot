@@ -10,9 +10,11 @@ import com.supportbot.repo.TicketRepository;
 import com.supportbot.telegram.TelegramApiClient;
 import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 
+@Transactional
 @Service
 public class TicketService {
     private final TicketRepository tickets;
@@ -123,6 +125,7 @@ public class TicketService {
             t.setAssignedAdminTelegramUserId(adminUserId);
             t.setStatus(TicketStatus.ASSIGNED);
             tickets.save(t);
+            ensureGroupAdmin(t.getAdminGroup(), adminUserId);
 
             api.sendMessage(t.getForumChatId(), t.getMessageThreadId(),
                     "✅ Тикет взят админом: <code>" + adminUserId + "</code>",
@@ -143,6 +146,7 @@ public class TicketService {
         }
         t.setStatus(TicketStatus.RESOLVED);
         tickets.save(t);
+        ensureGroupAdmin(t.getAdminGroup(), adminUserId);
 
         var kb = TelegramUi.inlineKeyboard(TelegramUi.rows(
                 TelegramUi.row(
@@ -194,6 +198,18 @@ public class TicketService {
         if (t.getMessageThreadId() != null) {
             api.deleteForumTopic(t.getForumChatId(), t.getMessageThreadId()).onErrorResume(e -> reactor.core.publisher.Mono.empty()).block();
         }
+    }
+
+    private void ensureGroupAdmin(AdminGroup g, long telegramUserId) {
+        if (g == null || g.getId() == null) return;
+
+        groupAdmins.findByAdminGroupIdAndTelegramUserId(g.getId(), telegramUserId).orElseGet(() -> {
+            var a = new com.supportbot.domain.GroupAdmin();
+            a.setAdminGroup(g);
+            a.setTelegramUserId(telegramUserId);
+            a.setRole(com.supportbot.domain.enums.AdminRole.ADMIN);
+            return groupAdmins.save(a);
+        });
     }
 
     private Integer extractThreadId(String json) {

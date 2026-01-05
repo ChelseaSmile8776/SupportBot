@@ -39,6 +39,9 @@ public class MenuService {
                         TelegramUi.btn("🎫 Мои тикеты", "MENU:MY")
                 ),
                 TelegramUi.row(
+                        TelegramUi.btn("➕ Подключить поддержку", "MENU:CONNECT")
+                ),
+                TelegramUi.row(
                         TelegramUi.btn("🏢 Мои поддержки", "MENU:SUPPORTS"),
                         TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
                 )
