@@ -144,24 +144,26 @@ public class UpdateRouter {
         String data = TelegramJson.textOrNull(cq, "data");
         var from = TelegramJson.obj(cq, "from");
         Long fromId = TelegramJson.longOrNull(from, "id");
-        if (data == null || fromId == null) return;
+
+        if (id == null || data == null || fromId == null) return;
+
+        api.answerCallbackQuery(id, null)
+                .onErrorResume(e -> reactor.core.publisher.Mono.empty())
+                .subscribe();
 
         UserProfile user = ensureUser(from);
 
         if (data.startsWith("SW:")) {
-            api.answerCallbackQuery(id, "Ок").block();
             handleSwitch(user, data);
             return;
         }
 
         if (data.startsWith("MENU:")) {
-            api.answerCallbackQuery(id, null).block();
             handleMenu(user, data);
             return;
         }
 
         if (data.startsWith("T:")) {
-            api.answerCallbackQuery(id, null).block();
             handleTicketAction(fromId, data);
         }
     }
