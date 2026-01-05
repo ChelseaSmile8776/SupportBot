@@ -1,0 +1,118 @@
+#!/bin/sh
+
+os_family=unknown
+
+msg()
+{
+	printf '\033[32mINFO\t%s\033[0m\n' "$*"
+}
+
+err()
+{
+	printf '\033[31;1mERROR\t%s\033[0m\n' "$*"
+	exit 1
+}
+
+errexit()
+{
+	if [ "$?" -eq 0 ]; then
+		exit 0
+	else
+		err Exiting with non-zero exit code.
+	fi
+}
+
+detect_os()
+{
+	if [ -f /etc/debian_version ]; then
+		os_family=debian
+	elif [ -f /etc/redhat-release ]; then
+		os_family=redhat
+	fi
+}
+
+download_file()
+{
+	if command -v curl >/dev/null 2>&1; then
+		curl -s "$1" -o "$2"
+	elif command -v wget >/dev/null 2>&1; then
+		wget $1 -O $2
+	else
+		err Install curl or wget before runing the script
+	fi
+}
+
+setup_debian()
+{
+	msg Setup repository
+	(umask 0022 && download_file \
+		http://zabbix.repo.timeweb.ru/timeweb-zabbix.gpg \
+		/etc/apt/trusted.gpg.d/timeweb-zabbix.gpg)
+	os_codename="$(lsb_release -sc)"
+	case "$os_codename" in
+		hirsute|jammy|noble)
+			os_codename=focal;;
+		bookworm)
+			os_codename=bullseye;;
+		*)
+            : # do nothing
+	esac
+	os_release="$(lsb_release -si | tr '[:upper:]' '[:lower:]')"
+	echo "deb [arch=amd64] http://zabbix.repo.timeweb.ru/$os_release/ $os_codename main" > /etc/apt/sources.list.d/timeweb-zabbix.list
+	msg Install Zabbix agent
+	apt-get -qq update
+	apt-get install zabbix-agent-timeweb --yes
+	msg Allow incoming connections to 10050/TCP port
+	ufw allow 10050/tcp
+	ufw reload
+}
+
+setup_redhat()
+{
+	msg Setup repository
+	grep -qi "fedora" /etc/redhat-release && os_name="fedora" || os_name="centos"
+	cat <<-EOF > /etc/yum.repos.d/timeweb-zabbix.repo
+	[timeweb-zabbix]
+	name=Zabbix Agent From Timeweb
+	baseurl=http://zabbix.repo.timeweb.ru/$os_name/\$releasever/zabbix/x86_64/
+	gpgkey=http://zabbix.repo.timeweb.ru/public.gpg
+	gpgcheck=1
+	repo_gpgcheck=0
+	enabled=1
+	skip_if_unavailable=1
+EOF
+	msg Install Zabbix agent
+	yum --disablerepo='*' --enablerepo='timeweb-zabbix' makecache
+	yum -y install zabbix-agent-timeweb
+	msg Allow incoming connections to 10050/TCP port
+	if command -v firewall-cmd >/dev/null 2>&1; then
+		firewall-cmd --zone=public --add-port=10050/tcp --permanent
+	else
+		iptables -I INPUT -p tcp --dport 10050 -j ACCEPT
+		iptables -I OUTPUT -p tcp --dport 10050 -j ACCEPT
+	fi
+}
+
+set -e
+trap errexit EXIT
+trap cleanup INT HUP TERM
+
+if [ "$(id -u)" -gt 0 ]; then
+	err This script must be launched with root privileges
+fi
+
+detect_os
+
+case "$os_family" in
+	debian)
+		setup_debian
+		;;
+	redhat)
+		setup_redhat
+		;;
+	*)
+		err OS is not supported or unable to detect, try to install Zabbix package manually
+esac
+
+msg NOTE: 10050 TCP port must be opened for connections
+msg NOTE: List of Zabbix server IPs can be found in /etc/zabbix/zabbix_agentd.conf

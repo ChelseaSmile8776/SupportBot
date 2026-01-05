@@ -209,11 +209,12 @@ public class UpdateRouter {
             case "MENU:CREATE" -> tickets.createTicket(user);
             case "MENU:MY" -> menu.showMyTickets(user);
             case "MENU:SUPPORTS" -> api.sendMessage(user.getTelegramUserId(), null,
-                    "🏢 Мои поддержки (MVP): переключение через ссылку /start <code>.\n" +
+                    "🏢 Мои поддержки (MVP): переключение через ссылку /start CODE.\n" +
                             "Позже сделаем список последних поддержек кнопками.",
                     null).block();
+
             case "MENU:CODE" -> api.sendMessage(user.getTelegramUserId(), null,
-                    "🔁 Просто открой ссылку поддержки (она выглядит как t.me/<bot>?start=CODE).\n" +
+                    "🔁 Просто открой ссылку поддержки (она выглядит как https://t.me/ItsMySupportBot?start=CODE).\n" +
                             "Если хочешь — пришли сюда CODE, и я добавлю ручной ввод в следующем шаге.",
                     null).block();
             case "MENU:BACK" -> menu.showMainMenu(user);
