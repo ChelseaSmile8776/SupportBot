@@ -17,16 +17,23 @@ public class WebhookController {
         this.secret = secret;
     }
 
-    @PostMapping("/webhook")
+    // Принимаем ОБА пути: /webhook и /supportbot/webhook
+    @PostMapping({"/webhook", "/supportbot/webhook"})
     @ResponseStatus(HttpStatus.OK)
     public void onUpdate(@RequestBody Update update,
                          @RequestHeader(name = "X-Telegram-Bot-Api-Secret-Token", required = false)
                          String headerSecret) {
+
         if (secret != null && !secret.isBlank()) {
             if (headerSecret == null || !secret.equals(headerSecret)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             }
         }
-        router.route(update);
+
+        try {
+            router.route(update);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

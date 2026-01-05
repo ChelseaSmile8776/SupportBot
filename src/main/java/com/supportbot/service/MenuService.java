@@ -5,6 +5,8 @@ import com.supportbot.repo.TicketRepository;
 import com.supportbot.telegram.TelegramApiClient;
 import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supportbot.repo.UserProfileRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -13,10 +15,13 @@ import java.util.Map;
 public class MenuService {
     private final TelegramApiClient api;
     private final TicketRepository tickets;
+    private final UserProfileRepository users;
+    private final ObjectMapper om = new ObjectMapper();
 
-    public MenuService(TelegramApiClient api, TicketRepository tickets) {
+    public MenuService(TelegramApiClient api, TicketRepository tickets, UserProfileRepository users) {
         this.api = api;
         this.tickets = tickets;
+        this.users = users;
     }
 
     public void showMainMenu(UserProfile user) {
@@ -45,8 +50,18 @@ public class MenuService {
                 "Выбирай действие ниже 👇";
 
         var resp = api.sendMessage(user.getTelegramUserId(), null, text, kb).block();
-        // message_id вытащим в следующем шаге (сейчас для простоты оставим без парсинга JSON)
-        // Чтобы реально удалять меню, ниже в UpdateRouter мы будем парсить message_id из ответа.
+
+        try {
+            if (resp != null) {
+                var node = om.readTree(resp);
+                int messageId = node.path("result").path("message_id").asInt(0);
+                if (messageId != 0) {
+                    user.setLastMenuMessageId(messageId);
+                    users.save(user);
+                }
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     public void showMyTickets(UserProfile user) {

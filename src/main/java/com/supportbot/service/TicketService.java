@@ -44,6 +44,21 @@ public class TicketService {
 
         String topicName = "🎫 Тикет #" + t.getId();
         Integer threadId = extractThreadId(api.createForumTopic(g.getChatId(), topicName).block());
+
+        if (threadId == null) {
+            tickets.delete(t);
+
+            api.sendMessage(user.getTelegramUserId(), null,
+                    "⚠️ Не получилось создать тикет в группе поддержки.\n" +
+                            "Проверь, что:\n" +
+                            "1) Группа — форум (Topics включены).\n" +
+                            "2) Бот — админ и имеет право manage_topics.\n" +
+                            "3) Бот может отправлять сообщения в группе.\n\n" +
+                            "После исправления прав попробуй ещё раз.",
+                    null).block();
+            return;
+        }
+
         t.setMessageThreadId(threadId);
         t = tickets.save(t);
 

@@ -87,7 +87,15 @@ public class TelegramApiClient {
                 .uri(method)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
-                .retrieve()
-                .bodyToMono(String.class);
+                .exchangeToMono(resp ->
+                        resp.bodyToMono(String.class).defaultIfEmpty("")
+                )
+                // Сетевые/SSL/timeout ошибки тоже не должны валить webhook
+                .onErrorResume(e -> Mono.just(
+                        "{\"ok\":false,\"description\":\"" +
+                                e.getClass().getSimpleName() + ": " +
+                                String.valueOf(e.getMessage()).replace("\"", "'") +
+                                "\"}"
+                ));
     }
 }

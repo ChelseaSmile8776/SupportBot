@@ -183,6 +183,19 @@ public class UpdateRouter {
 
         Long gid = Long.valueOf(parts[2]);
         var pending = user.getPendingSwitchAdminGroup();
+
+        var until = user.getPendingSwitchUntil();
+        if (until == null || until.isBefore(OffsetDateTime.now())) {
+            user.setPendingSwitchAdminGroup(null);
+            user.setPendingSwitchUntil(null);
+            users.save(user);
+            api.sendMessage(user.getTelegramUserId(), null,
+                    "⏳ Запрос на переключение устарел. Открой ссылку поддержки ещё раз (/start CODE).",
+                    null).block();
+            menu.showMainMenu(user);
+            return;
+        }
+
         if (pending == null || !pending.getId().equals(gid)) return;
 
         user.setActiveAdminGroup(pending);

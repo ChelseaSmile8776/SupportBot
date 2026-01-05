@@ -23,6 +23,10 @@ public class WebhookSetupService implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        api.setWebhook(url, secret).block();
+        try {
+            api.setWebhook(url, secret).block();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
