@@ -12,9 +12,11 @@ import com.supportbot.service.MenuService;
 import com.supportbot.service.TicketService;
 import com.supportbot.telegram.dto.Update;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 
+@Transactional
 @Component
 public class UpdateRouter {
     private final GroupBootstrapService bootstrap;
@@ -154,6 +156,16 @@ public class UpdateRouter {
         UserProfile user = ensureUser(from);
 
         if (data.startsWith("SW:")) {
+            var msg = TelegramJson.obj(cq, "message");
+            var chat = TelegramJson.obj(msg, "chat");
+            Long chatId = TelegramJson.longOrNull(chat, "id");
+            Integer messageId = TelegramJson.intOrNull(msg, "message_id");
+            if (chatId != null && messageId != null) {
+                api.deleteMessage(chatId, messageId)
+                        .onErrorResume(e -> reactor.core.publisher.Mono.empty())
+                        .subscribe();
+            }
+
             handleSwitch(user, data);
             return;
         }

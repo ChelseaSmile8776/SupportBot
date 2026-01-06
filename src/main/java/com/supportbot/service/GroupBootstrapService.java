@@ -53,6 +53,18 @@ public class GroupBootstrapService {
 
         if (!"administrator".equals(status) && !"member".equals(status)) return;
 
+        if ("member".equals(status)) {
+            api.sendMessage(actorUserId, null,
+                    "Я добавлен в группу ✅\n" +
+                            "Теперь сделай меня админом и дай права (минимум):\n" +
+                            "• manage_topics\n• delete_messages\n• pin_messages\n• edit_messages\n\n" +
+                            "После этого я создам служебные топики и пришлю ссылку для клиентов.",
+                    null).block();
+            return;
+        }
+
+        if (!"administrator".equals(status)) return;
+
         if (!isForum) {
             api.sendMessage(actorUserId, null,
                     "⚠️ В группе должны быть включены <b>темы (Topics)</b> — это должна быть форум‑супергруппа.\n" +

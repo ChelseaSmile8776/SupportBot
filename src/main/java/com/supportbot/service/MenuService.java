@@ -7,10 +7,12 @@ import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supportbot.repo.UserProfileRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 
+@Transactional
 @Service
 public class MenuService {
     private final TelegramApiClient api;
