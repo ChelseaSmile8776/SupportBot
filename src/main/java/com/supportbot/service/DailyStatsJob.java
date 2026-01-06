@@ -17,7 +17,7 @@ public class DailyStatsJob {
         this.api = api;
     }
 
-    @Scheduled(cron = "0 0 21 * * *", zone = "Europe/Moscow")
+    @Scheduled(cron = "0 * * * * *", zone = "Europe/Moscow")
     public void run() {
         for (var g : groups.findAll()) {
             if (g.getPinnedStatsMessageId() != null) {
