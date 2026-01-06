@@ -2,7 +2,7 @@ name: build-and-push
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main" , "develop"]
 
 permissions:
   contents: read
