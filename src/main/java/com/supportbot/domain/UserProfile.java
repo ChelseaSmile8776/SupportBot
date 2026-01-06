@@ -18,14 +18,14 @@ public class UserProfile {
     @Column(name = "first_name")
     private String firstName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "active_admin_group_id")
     private AdminGroup activeAdminGroup;
 
     @Column(name = "last_menu_message_id")
     private Integer lastMenuMessageId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "pending_switch_admin_group_id")
     private AdminGroup pendingSwitchAdminGroup;
 
