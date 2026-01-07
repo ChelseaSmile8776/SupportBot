@@ -293,22 +293,23 @@ public class UpdateRouter {
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
 
-        users.save(user);
+        UserProfile savedUser = users.save(user);
 
-        user.setActiveAdminGroup(group);
+        savedUser.setActiveAdminGroup(group);
 
-        memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
+        memberships.findByUserProfileIdAndAdminGroupId(savedUser.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
-            m.setUserProfile(user);
+            m.setUserProfile(savedUser);
             m.setAdminGroup(group);
             return memberships.save(m);
         });
 
-        api.sendMessage(user.getTelegramUserId(), null,
+        api.sendMessage(savedUser.getTelegramUserId(), null,
                 "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
                 null).block();
 
-        menu.showMainMenu(user);
+
+        menu.showMainMenu(savedUser);
     }
 
     private void handleMenu(UserProfile user, String data) {
