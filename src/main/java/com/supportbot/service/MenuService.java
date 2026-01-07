@@ -2,6 +2,7 @@ package com.supportbot.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supportbot.domain.UserProfile;
+import com.supportbot.repo.AdminGroupRepository;
 import com.supportbot.repo.GroupAdminRepository;
 import com.supportbot.repo.SupportMembershipRepository;
 import com.supportbot.repo.TicketRepository;
@@ -9,14 +10,11 @@ import com.supportbot.repo.UserProfileRepository;
 import com.supportbot.telegram.TelegramApiClient;
 import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-//@Transactional
 @Service
 public class MenuService {
     private final TelegramApiClient api;
@@ -24,34 +22,35 @@ public class MenuService {
     private final UserProfileRepository users;
     private final SupportMembershipRepository memberships;
     private final GroupAdminRepository groupAdmins;
+    private final AdminGroupRepository groups;
     private final ObjectMapper om = new ObjectMapper();
 
     public MenuService(TelegramApiClient api,
                        TicketRepository tickets,
                        UserProfileRepository users,
                        SupportMembershipRepository memberships,
-                       GroupAdminRepository groupAdmins) {
+                       GroupAdminRepository groupAdmins,
+                       AdminGroupRepository groups) {
         this.api = api;
         this.tickets = tickets;
         this.users = users;
         this.memberships = memberships;
         this.groupAdmins = groupAdmins;
+        this.groups = groups;
     }
 
     public void showMainMenu(UserProfile user) {
-//        if (user.getPendingSwitchAdminGroup() == null && user.getPendingSwitchUntil() != null) {
-//            user.setPendingSwitchUntil(null);
-//            users.save(user);
-//        }
 
         if (user.getLastMenuMessageId() != null) {
             api.deleteMessage(user.getTelegramUserId(), user.getLastMenuMessageId())
                     .onErrorResume(e -> reactor.core.publisher.Mono.empty()).block();
         }
 
-        String supportLine = (user.getActiveAdminGroup() == null)
+        String activeTitle = groups.findActiveGroupTitleByUserId(user.getId());
+
+        String supportLine = (activeTitle == null)
                 ? "🏢 Активная поддержка: <b>не выбрана</b>\nОткрой ссылку поддержки или нажми «Ввести код»."
-                : "🏢 Активная поддержка: <b>" + safe(user.getActiveAdminGroup().getTitle()) + "</b>";
+                : "🏢 Активная поддержка: <b>" + safe(activeTitle) + "</b>";
 
         var kb = TelegramUi.inlineKeyboard(TelegramUi.rows(
                 TelegramUi.row(
@@ -63,7 +62,7 @@ public class MenuService {
                         TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("☎\uFE0F Созданные поддержки", "MENU:ADMIN")
+                        TelegramUi.btn("☎️\uFE0F Созданные поддержки", "MENU:ADMIN")
                 )
         ));
 
@@ -86,6 +85,7 @@ public class MenuService {
         } catch (Exception ignored) {
         }
     }
+
 
     public void showEnterCode(UserProfile user) {
         user.setPendingSwitchAdminGroup(null);
