@@ -11,6 +11,7 @@ import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,11 @@ public class MenuService {
     }
 
     public void showMainMenu(UserProfile user) {
+        if (user.getPendingSwitchAdminGroup() == null && user.getPendingSwitchUntil() != null) {
+            user.setPendingSwitchUntil(null);
+            users.save(user);
+        }
+
         if (user.getLastMenuMessageId() != null) {
             api.deleteMessage(user.getTelegramUserId(), user.getLastMenuMessageId())
                     .onErrorResume(e -> reactor.core.publisher.Mono.empty()).block();
@@ -79,6 +85,20 @@ public class MenuService {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    public void showEnterCode(UserProfile user) {
+        user.setPendingSwitchAdminGroup(null);
+        user.setPendingSwitchUntil(OffsetDateTime.now().plusMinutes(5));
+        users.save(user);
+
+        api.sendMessage(user.getTelegramUserId(), null,
+                "✍️ <b>Введите код поддержки</b>\n\n" +
+                        "Отправьте мне код группы (например <code>start-xyz</code>), который вам дал администратор.",
+                TelegramUi.inlineKeyboard(TelegramUi.rows(
+                        TelegramUi.row(TelegramUi.btn("⬅️ Отмена", "MENU:BACK"))
+                ))
+        ).block();
     }
 
     public void showMyTickets(UserProfile user) {

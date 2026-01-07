@@ -1,7 +1,7 @@
 package com.supportbot.telegram;
 
-
 import com.fasterxml.jackson.databind.JsonNode;
+import com.supportbot.domain.AdminGroup;
 import com.supportbot.domain.SupportMembership;
 import com.supportbot.domain.UserProfile;
 import com.supportbot.repo.AdminGroupRepository;
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 @Transactional
 @Component
@@ -67,6 +68,7 @@ public class UpdateRouter {
         Long fromId = TelegramJson.longOrNull(from, "id");
         if (fromId == null) return;
 
+
         // сообщения админа в топике
         if (!"private".equals(chatType)) {
             Long chatId = TelegramJson.longOrNull(chat, "id");
@@ -95,11 +97,44 @@ public class UpdateRouter {
             return;
         }
 
-        // обычный текст идёт в активный тикет
+        if (user.getPendingSwitchUntil() != null
+                && user.getPendingSwitchUntil().isAfter(OffsetDateTime.now())
+                && user.getPendingSwitchAdminGroup() == null) {
+
+            handleCodeInput(user, text);
+            return;
+        }
+
         if (text != null && !text.isBlank()) {
             tickets.onClientMessage(user.getTelegramUserId(), text);
         }
     }
+
+/*** Обработка текстового ввода кода (когда юзер нажал "Ввести код")
+ */
+private void handleCodeInput(UserProfile user, String code) {
+    user.setPendingSwitchUntil(null);
+    users.save(user);
+
+    if (code == null || code.isBlank()) {
+        menu.showMainMenu(user);
+        return;
+    }
+
+    var gOpt = groups.findByPublicCode(code.trim());
+    if (gOpt.isEmpty()) {
+        api.sendMessage(user.getTelegramUserId(), null,
+                "❌ <b>Код не найден</b>\n\nПроверьте правильность ввода и попробуйте снова.",
+                TelegramUi.inlineKeyboard(TelegramUi.rows(
+                        TelegramUi.row(TelegramUi.btn("🔄 Ввести еще раз", "MENU:CODE")),
+                        TelegramUi.row(TelegramUi.btn("⬅️ В меню", "MENU:BACK"))
+                ))
+        ).block();
+        return;
+    }
+
+    processSwitchRequest(user, gOpt.get());
+}
 
     private void onStart(UserProfile user, String payload) {
         if (payload == null || payload.isBlank()) {
@@ -116,15 +151,22 @@ public class UpdateRouter {
             return;
         }
 
-        var g = gOpt.get();
+        processSwitchRequest(user, gOpt.get());
+    }
+
+    /**
+     * Общий метод для onStart и для ручного ввода кода
+     */
+    private void processSwitchRequest(UserProfile user, AdminGroup g) {
         if (user.getActiveAdminGroup() != null && user.getActiveAdminGroup().getId().equals(g.getId())) {
             api.sendMessage(user.getTelegramUserId(), null,
                     "✅ Ты уже в поддержке: <b>" + safe(g.getTitle()) + "</b>",
                     null).block();
-            menu.showMainMenu(user);return;
+            menu.showMainMenu(user);
+            return;
         }
 
-        // Да/Нет
+        // ожидание подтверждения
         user.setPendingSwitchAdminGroup(g);
         user.setPendingSwitchUntil(OffsetDateTime.now().plusMinutes(10));
         users.save(user);
@@ -176,8 +218,7 @@ public class UpdateRouter {
         }
 
         if (data.startsWith("T:")) {
-            handleTicketAction(fromId, data);
-        }
+            handleTicketAction(fromId, data);}
     }
 
     private void handleSwitch(UserProfile user, String data) {
@@ -242,10 +283,9 @@ public class UpdateRouter {
                             "3) Сделай бота админом и дай права: manage_topics, delete_messages, pin_messages, edit_messages.\n\n" +
                             "После этого бот сам создаст служебные топики и пришлёт ссылку для клиентов.",
                     null).block();
-            case "MENU:CODE" -> api.sendMessage(user.getTelegramUserId(), null,
-                    "🔁 Просто открой ссылку поддержки (она выглядит как https://t.me/ItsMySupportBot?start=CODE).\n" +
-                            "Если хочешь — пришли сюда CODE, и я добавлю ручной ввод в следующем шаге.",
-                    null).block();
+
+            case "MENU:CODE" -> menu.showEnterCode(user);
+
             case "MENU:BACK" -> menu.showMainMenu(user);
             default -> {}
         }
@@ -271,7 +311,8 @@ public class UpdateRouter {
     }
 
     private UserProfile ensureUser(JsonNode from) {
-        Long id = TelegramJson.longOrNull(from, "id");if (id == null) throw new IllegalStateException("No from.id");
+        Long id = TelegramJson.longOrNull(from, "id");
+        if (id == null) throw new IllegalStateException("No from.id");
 
         return users.findByTelegramUserId(id).orElseGet(() -> {
             UserProfile u = new UserProfile();
