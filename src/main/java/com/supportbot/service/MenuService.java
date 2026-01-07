@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-@Transactional
+//@Transactional
 @Service
 public class MenuService {
     private final TelegramApiClient api;
@@ -39,10 +39,10 @@ public class MenuService {
     }
 
     public void showMainMenu(UserProfile user) {
-        if (user.getPendingSwitchAdminGroup() == null && user.getPendingSwitchUntil() != null) {
-            user.setPendingSwitchUntil(null);
-            users.save(user);
-        }
+//        if (user.getPendingSwitchAdminGroup() == null && user.getPendingSwitchUntil() != null) {
+//            user.setPendingSwitchUntil(null);
+//            users.save(user);
+//        }
 
         if (user.getLastMenuMessageId() != null) {
             api.deleteMessage(user.getTelegramUserId(), user.getLastMenuMessageId())
