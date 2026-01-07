@@ -62,7 +62,8 @@ public class MenuService {
                         TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("☎️\uFE0F Созданные поддержки", "MENU:ADMIN")
+                        TelegramUi.btn("☎️\uFE0F Созданные поддержки", "MENU:ADMIN"),
+                        TelegramUi.btn("➕ Создать свою поддержку", "MENU:CONNECT")
                 )
         ));
 
