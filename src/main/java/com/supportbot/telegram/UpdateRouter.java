@@ -251,9 +251,9 @@ public class UpdateRouter {
         }
 
         var pending = user.getPendingSwitchAdminGroup();
-        var until = user.getPendingSwitchUntil();
 
         if (pending != null && pending.getId().equals(targetGroupId)) {
+            var until = user.getPendingSwitchUntil();
             if (until == null || until.isBefore(OffsetDateTime.now())) {
                 user.setPendingSwitchAdminGroup(null);
                 user.setPendingSwitchUntil(null);
@@ -281,12 +281,10 @@ public class UpdateRouter {
                 return;
             }
 
-            // Переключаем
             activateGroup(user, group);
             return;
         }
 
-        // Если ничего не подошло — показываем меню
         api.sendMessage(user.getTelegramUserId(), null,
                 "❌ Не удалось переключить группу.",
                 null).block();
@@ -299,7 +297,6 @@ public class UpdateRouter {
         user.setPendingSwitchUntil(null);
         users.save(user);
 
-        // Создаем связь, если её нет
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
             m.setUserProfile(user);
