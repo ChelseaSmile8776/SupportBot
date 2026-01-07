@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.Optional;
 
 @Transactional
 @Component
@@ -110,31 +109,29 @@ public class UpdateRouter {
         }
     }
 
-/*** Обработка текстового ввода кода (когда юзер нажал "Ввести код")
- */
-private void handleCodeInput(UserProfile user, String code) {
-    user.setPendingSwitchUntil(null);
-    users.save(user);
+    private void handleCodeInput(UserProfile user, String code) {
+        user.setPendingSwitchUntil(null);
+        users.save(user);
 
-    if (code == null || code.isBlank()) {
-        menu.showMainMenu(user);
-        return;
+        if (code == null || code.isBlank()) {
+            menu.showMainMenu(user);
+            return;
+        }
+
+        var gOpt = groups.findByPublicCode(code.trim());
+        if (gOpt.isEmpty()) {
+            api.sendMessage(user.getTelegramUserId(), null,
+                    "❌ <b>Код не найден</b>\n\nПроверьте правильность ввода и попробуйте снова.",
+                    TelegramUi.inlineKeyboard(TelegramUi.rows(
+                            TelegramUi.row(TelegramUi.btn("🔄 Ввести еще раз", "MENU:CODE")),
+                            TelegramUi.row(TelegramUi.btn("⬅️ В меню", "MENU:BACK"))
+                    ))
+            ).block();
+            return;
+        }
+
+        processSwitchRequest(user, gOpt.get());
     }
-
-    var gOpt = groups.findByPublicCode(code.trim());
-    if (gOpt.isEmpty()) {
-        api.sendMessage(user.getTelegramUserId(), null,
-                "❌ <b>Код не найден</b>\n\nПроверьте правильность ввода и попробуйте снова.",
-                TelegramUi.inlineKeyboard(TelegramUi.rows(
-                        TelegramUi.row(TelegramUi.btn("🔄 Ввести еще раз", "MENU:CODE")),
-                        TelegramUi.row(TelegramUi.btn("⬅️ В меню", "MENU:BACK"))
-                ))
-        ).block();
-        return;
-    }
-
-    processSwitchRequest(user, gOpt.get());
-}
 
     private void onStart(UserProfile user, String payload) {
         if (payload == null || payload.isBlank()) {
@@ -154,9 +151,6 @@ private void handleCodeInput(UserProfile user, String code) {
         processSwitchRequest(user, gOpt.get());
     }
 
-    /**
-     * Общий метод для onStart и для ручного ввода кода
-     */
     private void processSwitchRequest(UserProfile user, AdminGroup g) {
         if (user.getActiveAdminGroup() != null && user.getActiveAdminGroup().getId().equals(g.getId())) {
             api.sendMessage(user.getTelegramUserId(), null,
@@ -228,7 +222,8 @@ private void handleCodeInput(UserProfile user, String code) {
         }
 
         if (data.startsWith("T:")) {
-            handleTicketAction(fromId, data);}
+            handleTicketAction(fromId, data);
+        }
     }
 
     private void handleSwitch(UserProfile user, String data) {
@@ -242,39 +237,78 @@ private void handleCodeInput(UserProfile user, String code) {
         }
 
         var parts = data.split(":");
-        if (parts.length != 3) return;
-
-        Long gid = Long.valueOf(parts[2]);
-        var pending = user.getPendingSwitchAdminGroup();
-
-        var until = user.getPendingSwitchUntil();
-        if (until == null || until.isBefore(OffsetDateTime.now())) {
-            user.setPendingSwitchAdminGroup(null);
-            user.setPendingSwitchUntil(null);
-            users.save(user);
-            api.sendMessage(user.getTelegramUserId(), null,
-                    "⏳ Запрос на переключение устарел. Открой ссылку поддержки ещё раз (/start CODE).",
-                    null).block();
+        if (parts.length != 3) {
             menu.showMainMenu(user);
             return;
         }
 
-        if (pending == null || !pending.getId().equals(gid)) return;
+        Long targetGroupId;
+        try {
+            targetGroupId = Long.parseLong(parts[2]);
+        } catch (NumberFormatException e) {
+            menu.showMainMenu(user);
+            return;
+        }
 
-        user.setActiveAdminGroup(pending);
+        var pending = user.getPendingSwitchAdminGroup();
+        var until = user.getPendingSwitchUntil();
+
+        if (pending != null && pending.getId().equals(targetGroupId)) {
+            if (until == null || until.isBefore(OffsetDateTime.now())) {
+                user.setPendingSwitchAdminGroup(null);
+                user.setPendingSwitchUntil(null);
+                users.save(user);
+                api.sendMessage(user.getTelegramUserId(), null,
+                        "⏳ Запрос на переключение устарел. Открой ссылку поддержки ещё раз (/start CODE).",
+                        null).block();
+                menu.showMainMenu(user);
+                return;
+            }
+
+            activateGroup(user, pending);
+            return;
+        }
+
+        var membership = memberships.findByUserProfileIdAndAdminGroupId(user.getId(), targetGroupId);
+        if (membership.isPresent()) {
+            AdminGroup group = membership.get().getAdminGroup();
+
+            if (user.getActiveAdminGroup() != null && user.getActiveAdminGroup().getId().equals(group.getId())) {
+                api.sendMessage(user.getTelegramUserId(), null,
+                        "✅ Поддержка <b>" + safe(group.getTitle()) + "</b> уже активна.",
+                        null).block();
+                menu.showMainMenu(user);
+                return;
+            }
+
+            // Переключаем
+            activateGroup(user, group);
+            return;
+        }
+
+        // Если ничего не подошло — показываем меню
+        api.sendMessage(user.getTelegramUserId(), null,
+                "❌ Не удалось переключить группу.",
+                null).block();
+        menu.showMainMenu(user);
+    }
+
+    private void activateGroup(UserProfile user, AdminGroup group) {
+        user.setActiveAdminGroup(group);
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
         users.save(user);
 
-        memberships.findByUserProfileIdAndAdminGroupId(user.getId(), pending.getId()).orElseGet(() -> {
+        // Создаем связь, если её нет
+        memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
             m.setUserProfile(user);
-            m.setAdminGroup(pending);
+            m.setAdminGroup(group);
             return memberships.save(m);
         });
 
         api.sendMessage(user.getTelegramUserId(), null,
-                "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(pending.getTitle()) + "</b>",
+                "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
                 null).block();
 
         menu.showMainMenu(user);
@@ -289,15 +323,15 @@ private void handleCodeInput(UserProfile user, String code) {
             case "MENU:CONNECT" -> api.sendMessage(user.getTelegramUserId(), null,
                     "👮 <b>Подключить поддержку (для админов)</b>\n\n" +
                             "1) Создай супергруппу и включи <b>Topics</b> (форум).\n" +
-                            "2) Добавь @" + "ItsMySupportBot" + " в эту группу.\n" +
-                            "3) Сделай бота админом и дай права: manage_topics, delete_messages, pin_messages, edit_messages.\n\n" +
+                            "2) Добавь @" + "ItsMySupportBot" + " в эту группу.\n" +"3) Сделай бота админом и дай права: manage_topics, delete_messages, pin_messages, edit_messages.\n\n" +
                             "После этого бот сам создаст служебные топики и пришлёт ссылку для клиентов.",
                     null).block();
 
             case "MENU:CODE" -> menu.showEnterCode(user);
 
             case "MENU:BACK" -> menu.showMainMenu(user);
-            default -> {}
+            default -> {
+            }
         }
     }
 
@@ -316,14 +350,14 @@ private void handleCodeInput(UserProfile user, String code) {
                 int rating = Integer.parseInt(parts[3]);
                 tickets.rateAndFinish(actorUserId, ticketId, rating);
             }
-            default -> {}
+            default -> {
+            }
         }
     }
 
     private UserProfile ensureUser(JsonNode from) {
         Long id = TelegramJson.longOrNull(from, "id");
         if (id == null) throw new IllegalStateException("No from.id");
-
         return users.findByTelegramUserId(id).orElseGet(() -> {
             UserProfile u = new UserProfile();
             u.setTelegramUserId(id);
