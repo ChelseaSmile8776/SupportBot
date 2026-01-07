@@ -217,7 +217,7 @@ private void handleCodeInput(UserProfile user, String code) {
             var chat = TelegramJson.obj(msg, "chat");
             Long chatId = TelegramJson.longOrNull(chat, "id");
             Integer messageId = TelegramJson.intOrNull(msg, "message_id");
-            if (chatId != null && messageId != null) {
+            if (!"MENU:CREATE".equals(data) && chatId != null && messageId != null) {
                 api.deleteMessage(chatId, messageId)
                         .onErrorResume(e -> reactor.core.publisher.Mono.empty())
                         .subscribe();
