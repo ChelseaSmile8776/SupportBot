@@ -157,27 +157,29 @@ public class MenuService {
     public void showAdminProjects(UserProfile user) {
         var admins = groupAdmins.findByTelegramUserId(user.getTelegramUserId());
 
+        var rows = TelegramUi.rows(
+                TelegramUi.row(TelegramUi.btn("➕ Подключить новую", "MENU:CONNECT")),
+                TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
+        );
+
         if (admins.isEmpty()) {
             api.sendMessage(user.getTelegramUserId(), null,
-                    "🤷 Вы не являетесь администратором ни в одной группе.\nЧтобы создать свою поддержку — просто добавьте бота в вашу группу.",
-                    TelegramUi.inlineKeyboard(TelegramUi.rows(
-                            TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
-                    ))
+                    "🤷 Вы не являетесь администратором ни в одной группе.\n\n" +
+                            "Хотите создать свою поддержку? Нажмите кнопку ниже 👇",
+                    TelegramUi.inlineKeyboard(rows)
             ).block();
             return;
         }
 
-        StringBuilder sb = new StringBuilder("☎\uFE0F <b>Ваши проекты (вы админ)</b>\n\n");
+        StringBuilder sb = new StringBuilder("☎️\uFE0F <b>Ваши проекты (вы админ)</b>\n\n");
         for (var a : admins) {
             sb.append("• <b>").append(safe(a.getAdminGroup().getTitle())).append("</b>")
                     .append(" (").append(a.getRole()).append(")\n")
-                    .append("   🔗 Код для клиентов: <code>").append(a.getAdminGroup().getPublicCode()).append("</code>\n\n");
+                    .append("   🔗 Код: <code>").append(a.getAdminGroup().getPublicCode()).append("</code>\n\n");
         }
 
         api.sendMessage(user.getTelegramUserId(), null, sb.toString(),
-                TelegramUi.inlineKeyboard(TelegramUi.rows(
-                        TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
-                ))
+                TelegramUi.inlineKeyboard(rows)
         ).block();
     }
 
