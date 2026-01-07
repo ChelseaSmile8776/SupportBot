@@ -308,7 +308,6 @@ public class UpdateRouter {
                 "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
                 null).block();
 
-
         menu.showMainMenu(savedUser);
     }
 
