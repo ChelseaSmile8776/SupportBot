@@ -321,7 +321,7 @@ public class UpdateRouter {
             case "MENU:SUPPORTS" -> menu.showMySupports(user);
             case "MENU:ADMIN" -> menu.showAdminProjects(user);
             case "MENU:CONNECT" -> api.sendMessage(user.getTelegramUserId(), null,
-                    "👮 <b>Подключить поддержку (для админов)</b>\n\n" +
+                    "☎\uFE0F <b>Подключить поддержку (для админов)</b>\n\n" +
                             "1) Создай супергруппу и включи <b>Topics</b> (форум).\n" +
                             "2) Добавь @" + "ItsMySupportBot" + " в эту группу.\n" +"3) Сделай бота админом и дай права: manage_topics, delete_messages, pin_messages, edit_messages.\n\n" +
                             "После этого бот сам создаст служебные топики и пришлёт ссылку для клиентов.",

@@ -59,11 +59,11 @@ public class MenuService {
                         TelegramUi.btn("🎫 Мои тикеты", "MENU:MY")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("🏢 Мои подписки", "MENU:SUPPORTS"),
+                        TelegramUi.btn("🏢 Мои поддержки", "MENU:SUPPORTS"),
                         TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("👮 Мои проекты", "MENU:ADMIN")
+                        TelegramUi.btn("☎\uFE0F Созданные подедржки", "MENU:ADMIN")
                 )
         ));
 
@@ -167,7 +167,7 @@ public class MenuService {
             return;
         }
 
-        StringBuilder sb = new StringBuilder("👮 <b>Ваши проекты (вы админ)</b>\n\n");
+        StringBuilder sb = new StringBuilder("☎\uFE0F <b>Ваши проекты (вы админ)</b>\n\n");
         for (var a : admins) {
             sb.append("• <b>").append(safe(a.getAdminGroup().getTitle())).append("</b>")
                     .append(" (").append(a.getRole()).append(")\n")
