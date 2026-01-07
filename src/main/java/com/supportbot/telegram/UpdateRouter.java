@@ -293,26 +293,43 @@ public class UpdateRouter {
     }
 
     private void activateGroup(UserProfile user, AdminGroup group) {
+        // 1. ЖЕСТКОЕ ОБНОВЛЕНИЕ ЧЕРЕЗ SQL
+        // Это выполняется мгновенно и минует все проверки Hibernate
+        users.updateActiveGroup(user.getId(), group);
+
+        // 2. Сброс кэша Hibernate (чтобы он не подсунул старое при следующем чтении)
+        entityManager.clear();
+
+        // 3. Обновляем объект в памяти Java, чтобы передать в Меню ПРАВИЛЬНЫЕ данные прямо сейчас
+        // Так как мы только что очистили контекст (clear), нам лучше не использовать старый объект user для Lazy-подгрузок,
+        // но для передачи в меню с установленной группой он подойдет.
         user.setActiveAdminGroup(group);
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
 
-        user = users.save(user);
+        // (Опционально можно сохранить user еще раз, но updateActiveGroup уже сделал работу)
 
-        entityManager.flush();
-        entityManager.refresh(user);
-
-        UserProfile finalUser = user;
+        // 4. Логика membership
+        // Так как мы сделали clear(), user стал "detached".
+        // Лучше найти membership по ID, не полагаясь на прокси юзера.
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
-            m.setUserProfile(finalUser);
+            // Тут нам нужен привязанный юзер, а не detached.
+            // Но ради скорости просто сохраним new Membership с ID юзера (или merge).
+            // Проще всего:
+            var attachedUser = users.findById(user.getId()).orElseThrow();
+            m.setUserProfile(attachedUser);
             m.setAdminGroup(group);
             return memberships.save(m);
         });
 
         api.sendMessage(user.getTelegramUserId(), null,
-                "✅ Переключено: <b>" + safe(group.getTitle()) + "</b>", null).block();
+                "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
+                null).block();
 
+        // 5. Показываем меню.
+        // ВАЖНО: Мы передаем объект 'user', в котором в пункте 3 вручную проставили группу.
+        // MenuService просто возьмет user.getActiveAdminGroup().getTitle() и покажет верное название.
         menu.showMainMenu(user);
     }
 
