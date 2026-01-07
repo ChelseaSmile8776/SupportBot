@@ -11,6 +11,7 @@ import com.supportbot.service.GroupBootstrapService;
 import com.supportbot.service.MenuService;
 import com.supportbot.service.TicketService;
 import com.supportbot.telegram.dto.Update;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -293,14 +294,18 @@ public class UpdateRouter {
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
 
-        user = users.save(user);
+        if (users instanceof JpaRepository) {
+            user = ((JpaRepository<UserProfile, Long>) users).saveAndFlush(user);
+        } else {
+            user = users.save(user);
+        }
 
         user.setActiveAdminGroup(group);
 
-        UserProfile savedUser = user;
+        UserProfile finalUser = user;
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
-            m.setUserProfile(savedUser);
+            m.setUserProfile(finalUser);
             m.setAdminGroup(group);
             return memberships.save(m);
         });
