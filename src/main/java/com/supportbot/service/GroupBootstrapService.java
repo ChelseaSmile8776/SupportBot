@@ -96,7 +96,6 @@ public class GroupBootstrapService {
             g.setStatsTopicThreadId(t);
         }
 
-        // OWNER
         groupAdmins.findByAdminGroupIdAndTelegramUserId(g.getId(), actorUserId).orElseGet(() -> {
             GroupAdmin a = new GroupAdmin();
             a.setAdminGroup(g);
@@ -107,15 +106,18 @@ public class GroupBootstrapService {
 
         groups.save(g);
 
-        // отправляем главному админу ссылку для клиентов
         String clientLink = "https://t.me/" + botUsername + "?start=" + g.getPublicCode();
-        api.sendMessage(actorUserId, null,
-                "✅ Готово! Я подключился к вашей группе.\n\n" +"🔗 <b>Ссылка для клиентов</b> (её можно раздавать):\n" +
-                        clientLink + "\n\n" +
-                        "⚙️ Рекомендованные права для бота в группе:\n" +
-                        "• manage_topics\n• delete_messages\n• pin_messages\n• edit_messages\n\n" +
-                        "Если чего-то не будет — часть функций может не работать.",
-                null).block();
+        String successMessage = "✅ <b>Готово! Бот настроен.</b>\n\n" +
+                "🔗 <b>Ссылка для клиентов</b>:\n" +
+                clientLink + "\n\n" +
+                "⚙️ Убедитесь, что у бота есть права:\n" +
+                "• manage_topics\n• delete_messages\n• pin_messages\n• edit_messages";
+
+        api.sendMessage(actorUserId, null, successMessage, null).subscribe();
+
+        api.sendMessage(g.getChatId(), g.getAdminChatTopicThreadId(), successMessage, null)
+                .onErrorResume(e -> reactor.core.publisher.Mono.empty())
+                .subscribe();
     }
 
     private Integer extractThreadId(String json) {
