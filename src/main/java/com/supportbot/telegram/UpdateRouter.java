@@ -11,7 +11,7 @@ import com.supportbot.service.GroupBootstrapService;
 import com.supportbot.service.MenuService;
 import com.supportbot.service.TicketService;
 import com.supportbot.telegram.dto.Update;
-import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +27,7 @@ public class UpdateRouter {
     private final MenuService menu;
     private final TicketService tickets;
     private final TelegramApiClient api;
+    private final EntityManager entityManager;
 
     public UpdateRouter(GroupBootstrapService bootstrap,
                         UserProfileRepository users,
@@ -34,7 +35,8 @@ public class UpdateRouter {
                         SupportMembershipRepository memberships,
                         MenuService menu,
                         TicketService tickets,
-                        TelegramApiClient api) {
+                        TelegramApiClient api,
+                        EntityManager entityManager) {
         this.bootstrap = bootstrap;
         this.users = users;
         this.groups = groups;
@@ -42,6 +44,7 @@ public class UpdateRouter {
         this.menu = menu;
         this.tickets = tickets;
         this.api = api;
+        this.entityManager = entityManager;
     }
 
     public void route(Update u) {
@@ -294,13 +297,10 @@ public class UpdateRouter {
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
 
-        if (users instanceof JpaRepository) {
-            user = ((JpaRepository<UserProfile, Long>) users).saveAndFlush(user);
-        } else {
-            user = users.save(user);
-        }
+        user = users.save(user);
 
-        user.setActiveAdminGroup(group);
+        entityManager.flush();
+        entityManager.refresh(user);
 
         UserProfile finalUser = user;
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
@@ -311,8 +311,7 @@ public class UpdateRouter {
         });
 
         api.sendMessage(user.getTelegramUserId(), null,
-                "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
-                null).block();
+                "✅ Переключено: <b>" + safe(group.getTitle()) + "</b>", null).block();
 
         menu.showMainMenu(user);
     }
