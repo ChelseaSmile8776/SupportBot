@@ -213,6 +213,16 @@ private void handleCodeInput(UserProfile user, String code) {
         }
 
         if (data.startsWith("MENU:")) {
+            var msg = TelegramJson.obj(cq, "message");
+            var chat = TelegramJson.obj(msg, "chat");
+            Long chatId = TelegramJson.longOrNull(chat, "id");
+            Integer messageId = TelegramJson.intOrNull(msg, "message_id");
+            if (chatId != null && messageId != null) {
+                api.deleteMessage(chatId, messageId)
+                        .onErrorResume(e -> reactor.core.publisher.Mono.empty())
+                        .subscribe();
+            }
+
             handleMenu(user, data);
             return;
         }
