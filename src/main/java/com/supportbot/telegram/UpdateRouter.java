@@ -251,20 +251,16 @@ public class UpdateRouter {
         }
 
         var pending = user.getPendingSwitchAdminGroup();
-
         if (pending != null && pending.getId().equals(targetGroupId)) {
             var until = user.getPendingSwitchUntil();
             if (until == null || until.isBefore(OffsetDateTime.now())) {
                 user.setPendingSwitchAdminGroup(null);
                 user.setPendingSwitchUntil(null);
                 users.save(user);
-                api.sendMessage(user.getTelegramUserId(), null,
-                        "⏳ Запрос на переключение устарел. Открой ссылку поддержки ещё раз (/start CODE).",
-                        null).block();
+                api.sendMessage(user.getTelegramUserId(), null, "⏳ Ссылка устарела.", null).block();
                 menu.showMainMenu(user);
                 return;
             }
-
             activateGroup(user, pending);
             return;
         }
@@ -274,8 +270,9 @@ public class UpdateRouter {
             AdminGroup group = membership.get().getAdminGroup();
 
             if (user.getActiveAdminGroup() != null && user.getActiveAdminGroup().getId().equals(group.getId())) {
+                // Мы все равно показываем меню, чтобы обновить сообщение
                 api.sendMessage(user.getTelegramUserId(), null,
-                        "✅ Поддержка <b>" + safe(group.getTitle()) + "</b> уже активна.",
+                        "✅ Поддержка <b>" + safe(group.getTitle()) + "</b> уже выбрана.",
                         null).block();
                 menu.showMainMenu(user);
                 return;
@@ -286,7 +283,7 @@ public class UpdateRouter {
         }
 
         api.sendMessage(user.getTelegramUserId(), null,
-                "❌ Не удалось переключить группу.",
+                "❌ Ошибка: вы не подписаны на эту группу.",
                 null).block();
         menu.showMainMenu(user);
     }
@@ -295,7 +292,10 @@ public class UpdateRouter {
         user.setActiveAdminGroup(group);
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
+
         users.save(user);
+
+        user.setActiveAdminGroup(group);
 
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
