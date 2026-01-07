@@ -231,92 +231,78 @@ public class UpdateRouter {
     }
 
     private void handleSwitch(UserProfile user, String data) {
-        if ("SW:NO".equals(data)) {
-            user.setPendingSwitchAdminGroup(null);
-            user.setPendingSwitchUntil(null);
-            users.save(user);
-            api.sendMessage(user.getTelegramUserId(), null, "Окей, не переключаю 🙌", null).block();
-            menu.showMainMenu(user);
-            return;
-        }
-
-        var parts = data.split(":");
-        if (parts.length != 3) {
-            menu.showMainMenu(user);
-            return;
-        }
-
-        Long targetGroupId;
         try {
-            targetGroupId = Long.parseLong(parts[2]);
-        } catch (NumberFormatException e) {
-            menu.showMainMenu(user);
-            return;
-        }
-
-        var pending = user.getPendingSwitchAdminGroup();
-        if (pending != null && pending.getId().equals(targetGroupId)) {
-            var until = user.getPendingSwitchUntil();
-            if (until == null || until.isBefore(OffsetDateTime.now())) {
+            if ("SW:NO".equals(data)) {
                 user.setPendingSwitchAdminGroup(null);
                 user.setPendingSwitchUntil(null);
                 users.save(user);
-                api.sendMessage(user.getTelegramUserId(), null, "⏳ Ссылка устарела.", null).block();
-                menu.showMainMenu(user);
-                return;
-            }
-            activateGroup(user, pending);
-            return;
-        }
-
-        var membership = memberships.findByUserProfileIdAndAdminGroupId(user.getId(), targetGroupId);
-        if (membership.isPresent()) {
-            AdminGroup group = membership.get().getAdminGroup();
-
-            if (user.getActiveAdminGroup() != null && user.getActiveAdminGroup().getId().equals(group.getId())) {
-                // Мы все равно показываем меню, чтобы обновить сообщение
-                api.sendMessage(user.getTelegramUserId(), null,
-                        "✅ Поддержка <b>" + safe(group.getTitle()) + "</b> уже выбрана.",
-                        null).block();
                 menu.showMainMenu(user);
                 return;
             }
 
-            activateGroup(user, group);
-            return;
-        }
+            var parts = data.split(":");
+            if (parts.length != 3) {
+                menu.showMainMenu(user);
+                return;
+            }
 
-        api.sendMessage(user.getTelegramUserId(), null,
-                "❌ Ошибка: вы не подписаны на эту группу.",
-                null).block();
-        menu.showMainMenu(user);
+            Long targetGroupId;
+            try {
+                targetGroupId = Long.parseLong(parts[2]);
+            } catch (NumberFormatException e) {
+                menu.showMainMenu(user);
+                return;
+            }
+
+            var pending = user.getPendingSwitchAdminGroup();
+            if (pending != null && pending.getId().equals(targetGroupId)) {
+                var until = user.getPendingSwitchUntil();
+                if (until == null || until.isBefore(OffsetDateTime.now())) {
+                    // ...
+                    menu.showMainMenu(user);
+                    return;
+                }
+                activateGroup(user, pending);
+                return;
+            }
+
+            var membership = memberships.findByUserProfileIdAndAdminGroupId(user.getId(), targetGroupId);
+
+            if (membership.isPresent()) {
+                AdminGroup group = membership.get().getAdminGroup();
+
+                Long currentActiveId = (user.getActiveAdminGroup() != null) ? user.getActiveAdminGroup().getId() : null;
+
+                if (currentActiveId != null && currentActiveId.equals(group.getId())) {
+                    api.sendMessage(user.getTelegramUserId(), null, "✅ Уже активна.", null).block();
+                    menu.showMainMenu(user);
+                    return;
+                }
+
+                activateGroup(user, group);
+                return;
+            }
+
+            api.sendMessage(user.getTelegramUserId(), null, "❌ Ошибка: вы не подписаны.", null).block();
+            menu.showMainMenu(user);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            menu.showMainMenu(user);
+        }
     }
-
     private void activateGroup(UserProfile user, AdminGroup group) {
-        // 1. ЖЕСТКОЕ ОБНОВЛЕНИЕ ЧЕРЕЗ SQL
-        // Это выполняется мгновенно и минует все проверки Hibernate
         users.updateActiveGroup(user.getId(), group);
 
-        // 2. Сброс кэша Hibernate (чтобы он не подсунул старое при следующем чтении)
         entityManager.clear();
 
-        // 3. Обновляем объект в памяти Java, чтобы передать в Меню ПРАВИЛЬНЫЕ данные прямо сейчас
-        // Так как мы только что очистили контекст (clear), нам лучше не использовать старый объект user для Lazy-подгрузок,
-        // но для передачи в меню с установленной группой он подойдет.
         user.setActiveAdminGroup(group);
         user.setPendingSwitchAdminGroup(null);
         user.setPendingSwitchUntil(null);
 
-        // (Опционально можно сохранить user еще раз, но updateActiveGroup уже сделал работу)
-
-        // 4. Логика membership
-        // Так как мы сделали clear(), user стал "detached".
-        // Лучше найти membership по ID, не полагаясь на прокси юзера.
         memberships.findByUserProfileIdAndAdminGroupId(user.getId(), group.getId()).orElseGet(() -> {
             SupportMembership m = new SupportMembership();
-            // Тут нам нужен привязанный юзер, а не detached.
-            // Но ради скорости просто сохраним new Membership с ID юзера (или merge).
-            // Проще всего:
+
             var attachedUser = users.findById(user.getId()).orElseThrow();
             m.setUserProfile(attachedUser);
             m.setAdminGroup(group);
@@ -327,9 +313,6 @@ public class UpdateRouter {
                 "✅ Переключено!\nТеперь активная поддержка: <b>" + safe(group.getTitle()) + "</b>",
                 null).block();
 
-        // 5. Показываем меню.
-        // ВАЖНО: Мы передаем объект 'user', в котором в пункте 3 вручную проставили группу.
-        // MenuService просто возьмет user.getActiveAdminGroup().getTitle() и покажет верное название.
         menu.showMainMenu(user);
     }
 
