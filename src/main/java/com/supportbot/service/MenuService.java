@@ -143,7 +143,7 @@ public class MenuService {
             String mark = (user.getActiveAdminGroup() != null && m.getAdminGroup().getId().equals(user.getActiveAdminGroup().getId()))
                     ? "✅ " : "";
             rows.add(TelegramUi.row(
-                    TelegramUi.btn(mark + safe(m.getAdminGroup().getTitle()), "SW:" + m.getAdminGroup().getId())
+                    TelegramUi.btn(mark + safe(m.getAdminGroup().getTitle()), "SW:LIST:" + m.getAdminGroup().getId())
             ));
         }
         rows.add(TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK")));
