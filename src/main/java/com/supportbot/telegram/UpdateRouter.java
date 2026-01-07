@@ -233,10 +233,8 @@ public class UpdateRouter {
         switch (data) {
             case "MENU:CREATE" -> tickets.createTicket(user);
             case "MENU:MY" -> menu.showMyTickets(user);
-            case "MENU:SUPPORTS" -> api.sendMessage(user.getTelegramUserId(), null,
-                    "🏢 Мои поддержки (MVP): переключение через ссылку /start CODE.\n" +
-                            "Позже сделаем список последних поддержек кнопками.",
-                    null).block();
+            case "MENU:SUPPORTS" -> menu.showMySupports(user);
+            case "MENU:ADMIN" -> menu.showAdminProjects(user);
             case "MENU:CONNECT" -> api.sendMessage(user.getTelegramUserId(), null,
                     "👮 <b>Подключить поддержку (для админов)</b>\n\n" +
                             "1) Создай супергруппу и включи <b>Topics</b> (форум).\n" +

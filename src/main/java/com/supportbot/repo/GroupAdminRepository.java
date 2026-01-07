@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface GroupAdminRepository extends JpaRepository<GroupAdmin, Long> {
     Optional<GroupAdmin> findByAdminGroupIdAndTelegramUserId(Long adminGroupId, Long telegramUserId);
     List<GroupAdmin> findByAdminGroupIdOrderByRatingAvgDesc(Long adminGroupId);
+    List<GroupAdmin> findByTelegramUserId(Long telegramUserId);
 }

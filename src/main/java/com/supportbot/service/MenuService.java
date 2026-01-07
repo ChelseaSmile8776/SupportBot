@@ -1,14 +1,17 @@
 package com.supportbot.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supportbot.domain.UserProfile;
+import com.supportbot.repo.GroupAdminRepository;
+import com.supportbot.repo.SupportMembershipRepository;
 import com.supportbot.repo.TicketRepository;
+import com.supportbot.repo.UserProfileRepository;
 import com.supportbot.telegram.TelegramApiClient;
 import com.supportbot.telegram.TelegramUi;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.supportbot.repo.UserProfileRepository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -18,17 +21,26 @@ public class MenuService {
     private final TelegramApiClient api;
     private final TicketRepository tickets;
     private final UserProfileRepository users;
+    private final SupportMembershipRepository memberships;
+    private final GroupAdminRepository groupAdmins;
     private final ObjectMapper om = new ObjectMapper();
 
-    public MenuService(TelegramApiClient api, TicketRepository tickets, UserProfileRepository users) {
+    public MenuService(TelegramApiClient api,
+                       TicketRepository tickets,
+                       UserProfileRepository users,
+                       SupportMembershipRepository memberships,
+                       GroupAdminRepository groupAdmins) {
         this.api = api;
         this.tickets = tickets;
         this.users = users;
+        this.memberships = memberships;
+        this.groupAdmins = groupAdmins;
     }
 
     public void showMainMenu(UserProfile user) {
         if (user.getLastMenuMessageId() != null) {
-            api.deleteMessage(user.getTelegramUserId(), user.getLastMenuMessageId()).onErrorResume(e -> reactor.core.publisher.Mono.empty()).block();
+            api.deleteMessage(user.getTelegramUserId(), user.getLastMenuMessageId())
+                    .onErrorResume(e -> reactor.core.publisher.Mono.empty()).block();
         }
 
         String supportLine = (user.getActiveAdminGroup() == null)
@@ -41,11 +53,11 @@ public class MenuService {
                         TelegramUi.btn("🎫 Мои тикеты", "MENU:MY")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("➕ Подключить поддержку", "MENU:CONNECT")
+                        TelegramUi.btn("🏢 Мои подписки", "MENU:SUPPORTS"),
+                        TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
                 ),
                 TelegramUi.row(
-                        TelegramUi.btn("🏢 Мои поддержки", "MENU:SUPPORTS"),
-                        TelegramUi.btn("🔁 Ввести код", "MENU:CODE")
+                        TelegramUi.btn("👮 Мои проекты", "MENU:ADMIN")
                 )
         ));
 
@@ -90,6 +102,63 @@ public class MenuService {
         ));
 
         api.sendMessage(user.getTelegramUserId(), null, sb.toString(), kb).block();
+    }
+
+    public void showMySupports(UserProfile user) {
+        var list = memberships.findTop10ByUserProfileOrderByLastUsedAtDesc(user);
+
+        if (list.isEmpty()) {
+            api.sendMessage(user.getTelegramUserId(), null,
+                    "🤷 Вы пока не подписаны ни на одну поддержку.",
+                    TelegramUi.inlineKeyboard(TelegramUi.rows(
+                            TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
+                    ))
+            ).block();
+            return;
+        }
+
+        List<List<Map<String, Object>>> rows = new ArrayList<>();
+
+        for (var m : list) {
+            String mark = (user.getActiveAdminGroup() != null && m.getAdminGroup().getId().equals(user.getActiveAdminGroup().getId()))
+                    ? "✅ " : "";
+            rows.add(TelegramUi.row(
+                    TelegramUi.btn(mark + safe(m.getAdminGroup().getTitle()), "SW:" + m.getAdminGroup().getId())
+            ));
+        }
+        rows.add(TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK")));
+
+        api.sendMessage(user.getTelegramUserId(), null,
+                "🏢 <b>Ваши подписки</b>\nНажмите на группу, чтобы сделать её активной (для создания тикетов):",
+                TelegramUi.inlineKeyboard(rows)
+        ).block();
+    }
+
+    public void showAdminProjects(UserProfile user) {
+        var admins = groupAdmins.findByTelegramUserId(user.getTelegramUserId());
+
+        if (admins.isEmpty()) {
+            api.sendMessage(user.getTelegramUserId(), null,
+                    "🤷 Вы не являетесь администратором ни в одной группе.\nЧтобы создать свою поддержку — просто добавьте бота в вашу группу.",
+                    TelegramUi.inlineKeyboard(TelegramUi.rows(
+                            TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
+                    ))
+            ).block();
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("👮 <b>Ваши проекты (вы админ)</b>\n\n");
+        for (var a : admins) {
+            sb.append("• <b>").append(safe(a.getAdminGroup().getTitle())).append("</b>")
+                    .append(" (").append(a.getRole()).append(")\n")
+                    .append("   🔗 Код для клиентов: <code>").append(a.getAdminGroup().getPublicCode()).append("</code>\n\n");
+        }
+
+        api.sendMessage(user.getTelegramUserId(), null, sb.toString(),
+                TelegramUi.inlineKeyboard(TelegramUi.rows(
+                        TelegramUi.row(TelegramUi.btn("⬅️ Назад", "MENU:BACK"))
+                ))
+        ).block();
     }
 
     private String safe(String s) {
